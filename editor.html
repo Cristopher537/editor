@@ -12,10 +12,6 @@
         }
         li:hover { background: #1e293b; }
         .active { border-left: 4px solid #3b82f6; background: #1e293b; }
-        /* Scrollbar styling */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     </style>
 </head>
 <body class="h-screen flex flex-col p-4">
@@ -26,97 +22,69 @@
                     IBM i <span class="text-white">Web IDE</span>
                 </h1>
                 <p id="curFile" class="text-[10px] text-slate-500 font-bold mt-1 uppercase">
-                    Seleccione un archivo del explorador
+                    Cargando explorador...
                 </p>
             </div>
-            <div class="flex gap-4">
-                <button onclick="save()" 
-                        class="bg-blue-600 hover:bg-blue-500 px-8 py-2 rounded-lg font-bold text-sm transition-all shadow-lg shadow-blue-900/20">
-                    GUARDAR CAMBIOS
-                </button>
-            </div>
+            <button onclick="save()" class="bg-blue-600 hover:bg-blue-500 px-8 py-2 rounded-lg font-bold text-sm">
+                GUARDAR (SAVE)
+            </button>
         </header>
 
         <div class="flex flex-1 gap-4 overflow-hidden">
-            <!-- Explorador Lateral -->
             <div class="w-64 bg-slate-900/50 border border-slate-800 rounded-2xl p-2 overflow-y-auto">
-                <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest p-2 font-sans">IFS Root / Public</h2>
+                <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest p-2">Explorador</h2>
                 <ul id="files" class="text-sm space-y-1"></ul>
             </div>
-
-            <!-- Editor de Texto -->
-            <div class="flex-1 bg-black rounded-2xl border border-slate-800 overflow-hidden relative">
-                <textarea id="ed" spellcheck="false" 
-                          class="w-full h-full p-6 outline-none" 
-                          placeholder="Seleccione un archivo para empezar a editar..."></textarea>
+            <div class="flex-1 bg-black rounded-2xl border border-slate-800 overflow-hidden">
+                <textarea id="ed" class="w-full h-full p-6 outline-none spellcheck-false" 
+                          placeholder="Seleccione un archivo..."></textarea>
             </div>
         </div>
     </div>
 
     <script>
         let cur = '';
-        const listEl = document.getElementById('files');
-        const editorEl = document.getElementById('ed');
-        const curFileLabel = document.getElementById('curFile');
-
-        async function loadFileList() {
+        async function load() {
+            console.log('[CLIENTE] Pidiendo /api/list...');
             try {
                 const r = await fetch('/api/list');
+                if (!r.ok) throw new Error('Status: ' + r.status);
                 const d = await r.json();
-                listEl.innerHTML = '';
-                
-                // Procesar archivos de raiz y public
-                d.root.forEach(f => addFile(f, f));
-                d.public.forEach(f => addFile('public/' + f, f));
+                const l = document.getElementById('files');
+                l.innerHTML = '';
+                d.root.forEach(f => add(f, f, l));
+                d.public.forEach(f => add('public/' + f, f, l));
+                document.getElementById('curFile').innerText = 'Listo';
             } catch(e) { 
-                console.error('Error cargando archivos:', e); 
+                console.error('[CLIENTE] Error:', e);
+                document.getElementById('curFile').innerText = 'ERROR AL CARGAR LISTA';
             }
         }
-
-        function addFile(path, name) {
-            const li = document.createElement('li');
-            li.className = 'p-3 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-sans';
-            const color = path.includes('/') ? 'bg-amber-500' : 'bg-blue-500';
-            
-            li.innerHTML = `
-                <span class="w-2 h-2 rounded-full ${color}"></span>
-                <span class="truncate">${name}</span>
-            `;
-            
-            li.onclick = async () => {
-                const res = await fetch('/api/read?path=' + encodeURIComponent(path));
-                editorEl.value = await res.text();
-                cur = path;
-                curFileLabel.innerText = 'Editando: ' + path.toUpperCase();
-                
+        function add(p, n, l) {
+            const i = document.createElement('li');
+            i.className = 'p-3 rounded-xl cursor-pointer transition-all flex items-center gap-2';
+            const color = p.includes('/') ? 'bg-amber-500' : 'bg-blue-500';
+            i.innerHTML = `<span class="w-2 h-2 rounded-full ${color}"></span><span class="truncate">${n}</span>`;
+            i.onclick = async () => {
+                const res = await fetch('/api/read?path=' + encodeURIComponent(p));
+                document.getElementById('ed').value = await res.text();
+                cur = p;
+                document.getElementById('curFile').innerText = 'Editando: ' + p;
                 document.querySelectorAll('li').forEach(el => el.classList.remove('active'));
-                li.classList.add('active');
+                i.classList.add('active');
             };
-            listEl.appendChild(li);
+            l.appendChild(i);
         }
-
         async function save() {
-            if(!cur) return alert('No hay ningún archivo seleccionado');
-            
-            try {
-                const res = await fetch('/api/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ file: cur, content: editorEl.value })
-                });
-                
-                if(res.ok) {
-                    alert('Archivo guardado exitosamente en el IBM i');
-                } else {
-                    alert('Error al guardar el archivo');
-                }
-            } catch(e) {
-                alert('Error de conexión con el servidor');
-            }
+            if(!cur) return alert('Elija archivo');
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ file: cur, content: document.getElementById('ed').value })
+            });
+            if(res.ok) alert('Archivo guardado en el IFS');
         }
-
-        // Carga inicial de archivos
-        loadFileList();
+        load();
     </script>
 </body>
 </html>
