@@ -1,17 +1,18 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs').promises;
+const { exec } = require('child_process');
+const util = require('util');
 const { Connection, Statement } = require('idb-pconnector');
 
-const app = express();
+const execPromise = util.promisify(exec);
+const app = express(); // <--- Aquí es donde se define 'app'
 const PORT = 10209;
 const pub = path.join(__dirname, 'public');
 
 app.use(express.json());
 
-// --- 1. RUTAS DE LA API (Prioridad Máxima) ---
-
-// API MONITOR
+// --- 1. API MONITOR (DASHBOARD) ---
 app.get('/api/status', async (req, res) => {
     const cn = new Connection();
     try {
@@ -38,7 +39,8 @@ app.get('/api/status', async (req, res) => {
     finally { try { cn.disconn(); cn.close(); } catch (err) {} }
 });
 
-// API EDITOR: Listar
+// --- 2. API EDITOR (CON SOPORTE QSYS.LIB / MBR) ---
+
 app.get('/api/list', async (req, res) => {
     try {
         const targetDir = req.query.path || __dirname;
@@ -53,35 +55,50 @@ app.get('/api/list', async (req, res) => {
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// API EDITOR: Leer
 app.get('/api/read', async (req, res) => {
     try {
-        res.send(await fs.readFile(req.query.path, 'utf8'));
+        const filePath = req.query.path;
+        // Si es un miembro de librería (QSYS.LIB)
+        if (filePath.toUpperCase().includes('QSYS.LIB')) {
+            const tempPath = `/tmp/edit_temp_${Date.now()}.txt`;
+            const cmd = `CPYTOSTMF FROMMBR('${filePath}') TOSTMF('${tempPath}') STMFOPT(*REPLACE) STMFCCSID(1208)`;
+            await execPromise(`system "${cmd}"`);
+            const content = await fs.readFile(tempPath, 'utf8');
+            await fs.unlink(tempPath);
+            res.send(content);
+        } else {
+            res.send(await fs.readFile(filePath, 'utf8'));
+        }
     } catch (err) { res.status(500).send(err.message); }
 });
 
-// API EDITOR: Guardar
 app.post('/api/save', async (req, res) => {
     try {
-        await fs.writeFile(req.body.file, req.body.content, 'utf8');
-        res.send('ok');
+        const { file, content } = req.body;
+        if (file.toUpperCase().includes('QSYS.LIB')) {
+            const tempPath = `/tmp/save_temp_${Date.now()}.txt`;
+            await fs.writeFile(tempPath, content, 'utf8');
+            // CPYFRMSTMF convierte de UTF-8 de vuelta al CCSID del fuente
+            const cmd = `CPYFRMSTMF FROMSTMF('${tempPath}') TOMBR('${file}') MBROPT(*REPLACE)`;
+            await execPromise(`system "${cmd}"`);
+            await fs.unlink(tempPath);
+            res.send('ok');
+        } else {
+            await fs.writeFile(file, content, 'utf8');
+            res.send('ok');
+        }
     } catch (err) { res.status(500).send(err.message); }
 });
 
-// --- 2. RUTAS DE NAVEGACIÓN (Páginas) ---
+// --- 3. RUTAS DE NAVEGACIÓN ---
+app.get('/edit', (req, res) => res.sendFile(path.join(pub, 'editor.html')));
+app.get('/', (req, res) => res.sendFile(path.join(pub, 'index.html')));
 
-app.get('/edit', (req, res) => {
-    res.sendFile(path.join(pub, 'editor.html'));
-});
-
-// Dashboard (Raíz)
-app.get('/', (req, res) => {
-    res.sendFile(path.join(pub, 'index.html'));
-});
-
-// --- 3. ARCHIVOS ESTÁTICOS ---
 app.use(express.static(pub));
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Autoriza400 IDE & Monitor en puerto ${PORT}`);
+    console.log(`\n***************************************`);
+    console.log(`🚀 Autoriza400: Monitor e IDE activos`);
+    console.log(`📍 Puerto: ${PORT}`);
+    console.log(`***************************************\n`);
 });
