@@ -10,8 +10,8 @@ const pub = path.join(__dirname, 'public');
 // --- MIDDLEWARES ---
 app.use(express.json());
 
-// --- RUTAS DE NAVEGACIÓN (Prioridad Alta) ---
-// Definimos estas rutas ANTES del static para evitar conflictos
+// --- RUTAS DE NAVEGACIÓN ---
+// Importante: Definidas antes del static para evitar conflictos
 app.get('/', (req, res) => {
     res.sendFile(path.join(pub, 'index.html'));
 });
@@ -26,37 +26,55 @@ app.get('/edit', (req, res) => {
     });
 });
 
-// --- API EDITOR ---
-app.get('/api/editor/list', async (req, res) => {
+// --- API EDITOR (Rutas corregidas para coincidir con el cliente) ---
+
+// 1. Listar archivos
+app.get('/api/list', async (req, res) => {
     try {
         const f1 = await fs.readdir(__dirname);
         const f2 = await fs.readdir(pub);
         const flt = f => f.endsWith('.js') || f.endsWith('.html') || f.endsWith('.sql');
         res.json({ root: f1.filter(flt), public: f2.filter(flt) });
-    } catch (err) { res.status(500).send(err.message); }
+    } catch (err) { 
+        res.status(500).send(err.message); 
+    }
 });
 
-app.get('/api/editor/read', async (req, res) => {
+// 2. Leer contenido de un archivo
+app.get('/api/read', async (req, res) => {
     try {
-        const p = req.query.path.startsWith('public/')
-            ? path.join(pub, req.query.path.replace('public/', '')) 
-            : path.join(__dirname, req.query.path);
-        res.send(await fs.readFile(p, 'utf8'));
-    } catch (err) { res.status(500).send(err.message); }
+        const filePathParam = req.query.path;
+        if (!filePathParam) return res.status(400).send('Falta el parámetro path');
+
+        const p = filePathParam.startsWith('public/')
+            ? path.join(pub, filePathParam.replace('public/', '')) 
+            : path.join(__dirname, filePathParam);
+            
+        const content = await fs.readFile(p, 'utf8');
+        res.send(content);
+    } catch (err) { 
+        res.status(500).send(err.message); 
+    }
 });
 
-app.post('/api/editor/save', async (req, res) => {
+// 3. Guardar cambios en un archivo
+app.post('/api/save', async (req, res) => {
     try {
         const { fileName, content } = req.body;
+        if (!fileName) return res.status(400).send('Falta el nombre del archivo');
+
         const p = fileName.startsWith('public/')
             ? path.join(pub, fileName.replace('public/', '')) 
             : path.join(__dirname, fileName);
+            
         await fs.writeFile(p, content, 'utf8');
         res.send('ok');
-    } catch (err) { res.status(500).send(err.message); }
+    } catch (err) { 
+        res.status(500).send(err.message); 
+    }
 });
 
-// --- API STATUS ---
+// --- API STATUS (Base de Datos) ---
 app.get('/api/status', async (req, res) => {
     const cn = new Connection();
     try {
@@ -74,14 +92,14 @@ app.get('/api/status', async (req, res) => {
     }
 });
 
-// --- ARCHIVOS ESTÁTICOS (Al final como respaldo) ---
+// --- ARCHIVOS ESTÁTICOS ---
 app.use(express.static(pub));
 
 // --- INICIO DEL SERVIDOR ---
 app.listen(PORT, '0.0.0.0', () => {
-    console.log('-----------------------------------');
-    console.log('Monitor iniciado en puerto: ' + PORT);
-    console.log('Ruta pública: ' + pub);
-    console.log('Acceso editor: http://localhost:' + PORT + '/edit');
-    console.log('-----------------------------------');
+    console.log('====================================');
+    console.log('SERVIDOR INICIADO');
+    console.log('Puerto: ' + PORT);
+    console.log('URL Editor: http://localhost:' + PORT + '/edit');
+    console.log('====================================');
 });
