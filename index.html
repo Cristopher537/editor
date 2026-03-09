@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>IBM i Web IDE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: ui-monospace, monospace; }
+        textarea { 
+            background: #000000; color: #10b981; border: 1px solid #1e293b;
+            font-family: 'JetBrains Mono', 'Courier New', monospace; resize: none;
+        }
+        li:hover { background: #1e293b; }
+        .active { border-left: 4px solid #3b82f6; background: #1e293b; }
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col p-4">
+    <div class="max-w-7xl mx-auto w-full h-full flex flex-col">
+        <header class="flex justify-between items-center mb-4 border-b border-slate-800 pb-4">
+            <div>
+                <h1 class="text-xl font-black text-blue-500 uppercase tracking-tighter">
+                    IBM i <span class="text-white">Web IDE</span>
+                </h1>
+                <p id="curFile" class="text-[10px] text-slate-500 font-bold mt-1 uppercase">
+                    Seleccione un archivo del explorador
+                </p>
+            </div>
+            <div class="flex gap-4">
+                <button onclick="save()" 
+                        class="bg-blue-600 hover:bg-blue-500 px-8 py-2 rounded-lg font-bold text-sm transition-all shadow-lg shadow-blue-900/20">
+                    GUARDAR CAMBIOS
+                </button>
+            </div>
+        </header>
+
+        <div class="flex flex-1 gap-4 overflow-hidden">
+            <!-- Explorador Lateral -->
+            <div class="w-64 bg-slate-900/50 border border-slate-800 rounded-2xl p-2 overflow-y-auto">
+                <h2 class="text-[10px] font-black text-slate-600 uppercase tracking-widest p-2 font-sans">IFS Root / Public</h2>
+                <ul id="files" class="text-sm space-y-1"></ul>
+            </div>
+
+            <!-- Editor de Texto -->
+            <div class="flex-1 bg-black rounded-2xl border border-slate-800 overflow-hidden relative">
+                <textarea id="ed" spellcheck="false" 
+                          class="w-full h-full p-6 outline-none" 
+                          placeholder="Seleccione un archivo para empezar a editar..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let cur = '';
+        const listEl = document.getElementById('files');
+        const editorEl = document.getElementById('ed');
+        const curFileLabel = document.getElementById('curFile');
+
+        async function loadFileList() {
+            try {
+                const r = await fetch('/api/list');
+                const d = await r.json();
+                listEl.innerHTML = '';
+                
+                // Procesar archivos de raiz y public
+                d.root.forEach(f => addFile(f, f));
+                d.public.forEach(f => addFile('public/' + f, f));
+            } catch(e) { 
+                console.error('Error cargando archivos:', e); 
+            }
+        }
+
+        function addFile(path, name) {
+            const li = document.createElement('li');
+            li.className = 'p-3 rounded-xl cursor-pointer transition-all flex items-center gap-2 font-sans';
+            const color = path.includes('/') ? 'bg-amber-500' : 'bg-blue-500';
+            
+            li.innerHTML = `
+                <span class="w-2 h-2 rounded-full ${color}"></span>
+                <span class="truncate">${name}</span>
+            `;
+            
+            li.onclick = async () => {
+                const res = await fetch('/api/read?path=' + encodeURIComponent(path));
+                editorEl.value = await res.text();
+                cur = path;
+                curFileLabel.innerText = 'Editando: ' + path.toUpperCase();
+                
+                document.querySelectorAll('li').forEach(el => el.classList.remove('active'));
+                li.classList.add('active');
+            };
+            listEl.appendChild(li);
+        }
+
+        async function save() {
+            if(!cur) return alert('No hay ningún archivo seleccionado');
+            
+            try {
+                const res = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: cur, content: editorEl.value })
+                });
+                
+                if(res.ok) {
+                    alert('Archivo guardado exitosamente en el IBM i');
+                } else {
+                    alert('Error al guardar el archivo');
+                }
+            } catch(e) {
+                alert('Error de conexión con el servidor');
+            }
+        }
+
+        // Carga inicial de archivos
+        loadFileList();
+    </script>
+</body>
+</html>
