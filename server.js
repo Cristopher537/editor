@@ -112,14 +112,14 @@ app.post('/api/save', async (req, res) => {
                 await execSql(cn, `CREATE ALIAS QTEMP.${aliasReal} FOR ${lib}.${srcFile}(${mbr})`);
                 await execSql(cn, `CREATE TABLE QTEMP.${tableTemp} LIKE ${lib}.${srcFile}`);
                 
-                const chunkSize = 50; 
-                let seqCounter = 1;
+				const chunkSize = 50; 
+                let seqCounter = 100.00; // Iniciamos con un valor seguro
                 
                 for (let i = 0; i < lines.length; i += chunkSize) {
                     const chunk = lines.slice(i, i + chunkSize);
                     const values = chunk.map(line => {
-                        let seq = (seqCounter++).toFixed(2);
-                        if (seqCounter > 9999) seqCounter = 1; 
+                        let seq = seqCounter.toFixed(2);
+                        seqCounter += 1.00; // Incremento limpio por línea
                         const safeLine = line.replace(/'/g, "''"); 
                         return `(${seq}, 0, '${safeLine}')`;
                     }).join(',');
