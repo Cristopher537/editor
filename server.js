@@ -11,6 +11,11 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Ruta explícita para /edit
+app.get('/edit', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'editor.html'));
+});
+
 function parseQsysPath(ifsPath) {
     const s = ifsPath.toUpperCase();
     
