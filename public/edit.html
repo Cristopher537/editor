@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor IBM i / IFS</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 h-screen flex flex-col">
+
+    <!-- Barra Superior -->
+    <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex justify-between items-center shadow-md">
+        <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-code text-indigo-400 text-xl"></i>
+            <h1 class="font-semibold text-lg tracking-wide">Editor IBM i</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <input type="text" id="filePath" placeholder="/QSYS.LIB/BIBLIOTECA.LIB/ARCHIVO.FILE/MIEMBRO.MBR" 
+                class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm w-96 focus:outline-none focus:border-indigo-500">
+            <button onclick="loadFile()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded text-sm transition flex items-center space-x-1">
+                <i class="fa-solid fa-folder-open"></i> <span>Cargar</span>
+            </button>
+            <button onclick="saveFile()" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-1.5 rounded text-sm font-medium transition flex items-center space-x-1 shadow">
+                <i class="fa-solid fa-floppy-disk"></i> <span>Guardar</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Área de Edición -->
+    <main class="flex-1 p-4 flex flex-col">
+        <div class="flex-1 bg-slate-950 border border-slate-800 rounded-lg overflow-hidden flex flex-col shadow-inner">
+            <textarea id="fileContent" placeholder="// Escribe o carga tu código fuente RPGLE, CLP, SQL o IFS aquí..." 
+                class="flex-1 w-full h-full bg-transparent p-4 font-mono text-sm resize-none focus:outline-none leading-relaxed text-emerald-400"></textarea>
+        </div>
+        <div id="statusMessage" class="mt-2 text-xs text-slate-400 h-4">Listo.</div>
+    </main>
+
+    <script>
+        const statusEl = document.getElementById('statusMessage');
+
+        function setStatus(msg, isError = false) {
+            statusEl.textContent = msg;
+            statusEl.className = `mt-2 text-xs h-4 ${isError ? 'text-red-400' : 'text-emerald-400'}`;
+        }
+
+        async function loadFile() {
+            const filePath = document.getElementById('filePath').value.trim();
+            if (!filePath) {
+                setStatus('Por favor ingresa una ruta válida.', true);
+                return;
+            }
+
+            setStatus('Cargando archivo...');
+            try {
+                const response = await fetch(`/api/load?file=${encodeURIComponent(filePath)}`);
+                if (!response.ok) throw new Error(await response.text());
+                const data = await response.json();
+                document.getElementById('fileContent').value = data.content || '';
+                setStatus('Archivo cargado correctamente.');
+            } catch (err) {
+                setStatus('Error al cargar: ' + err.message, true);
+            }
+        }
+
+        async function saveFile() {
+            const filePath = document.getElementById('filePath').value.trim();
+            const content = document.getElementById('fileContent').value;
+
+            if (!filePath) {
+                setStatus('Ingresa la ruta de destino antes de guardar.', true);
+                return;
+            }
+
+            setStatus('Guardando cambios...');
+            try {
+                const response = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file: filePath, content })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText);
+                }
+
+                setStatus('¡Guardado exitosamente!');
+            } catch (err) {
+                setStatus('Error al guardar: ' + err.message, true);
+            }
+        }
+    </script>
+</body>
+</html>
